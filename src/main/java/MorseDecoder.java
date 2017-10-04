@@ -44,17 +44,24 @@ public class MorseDecoder {
      */
     private static double[] binWavFilePower(final WavFile inputFile)
             throws IOException, WavFileException {
+        int framesRead;
 
-        /*
-         * We should check the results of getNumFrames to ensure that they are safe to cast to int.
-         */
+        if (inputFile.getNumFrames() > Integer.MAX_VALUE) {
+            return null;
+        }
         int totalBinCount = (int) Math.ceil(inputFile.getNumFrames() / BIN_SIZE);
         double[] returnBuffer = new double[totalBinCount];
 
         double[] sampleBuffer = new double[BIN_SIZE * inputFile.getNumChannels()];
         for (int binIndex = 0; binIndex < totalBinCount; binIndex++) {
-            // Get the right number of samples from the inputFile
-            // Sum all the samples together and store them in the returnBuffer
+            framesRead = inputFile.readFrames(sampleBuffer, sampleBuffer.length);
+            returnBuffer[binIndex] = 0;
+            for (int i = 0; i < sampleBuffer.length; i++) {
+                returnBuffer[binIndex] += Math.abs(sampleBuffer[i]);
+            }
+            if (framesRead < sampleBuffer.length && binIndex < totalBinCount - 1) {
+                throw new RuntimeException("Read too few inputs");
+            }
         }
         return returnBuffer;
     }
@@ -68,7 +75,7 @@ public class MorseDecoder {
     /**
      * Convert power measurements to dots, dashes, and spaces.
      * <p>
-     * This function receives the result from binWavPower. It's job is to convert intervals of tone
+     * This function receives the result from binWavPower. Its job is to convert intervals of tone
      * or silence into dots (short tone), dashes (long tone), or space (long silence).
      * <p>
      * Write this function.
@@ -77,17 +84,29 @@ public class MorseDecoder {
      * @return the Morse code string of dots, dashes, and spaces
      */
     private static String powerToDotDash(final double[] powerMeasurements) {
-        /*
-         * There are four conditions to handle. Symbols should only be output when you see
-         * transitions. You will also have to store how much power or silence you have seen.
-         */
+        String output = "";
+        int consecutivePower = 0;
+        int consecutiveSilence = 0;
 
-        // if ispower and waspower
-        // else if ispower and not waspower
-        // else if issilence and wassilence
-        // else if issilence and not wassilence
+        for (int i = 0; i < powerMeasurements.length; i++) {
+            if (powerMeasurements[i] < POWER_THRESHOLD) {
+                if (consecutivePower >= DASH_BIN_COUNT) {
+                    output += "-";
+                } else if (consecutivePower > 0) {
+                    output += ".";
+                }
+                consecutivePower = 0;
+                consecutiveSilence++;
+            } else {
+                if (consecutiveSilence >= DASH_BIN_COUNT) {
+                    output += " ";
+                }
+                consecutivePower++;
+                consecutiveSilence = 0;
+            }
+        }
 
-        return "";
+        return output;
     }
 
     /**
